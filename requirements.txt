@@ -1,0 +1,9 @@
+pandas
+plotly
+networkx
+matplotlib
+google-genai
+openpyxl
+kiwipiepy
+scipy
+statsmodels
