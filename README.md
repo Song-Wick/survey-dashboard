@@ -18,7 +18,7 @@
 | 단계 | 내용 |
 |---|---|
 | Step 6 | 의미 네트워크 분석 — Kiwi 형태소 분석으로 명사 추출, 동시출현 네트워크 및 커뮤니티 탐지, 두 문항 비교 |
-| Step 7 | 공감 맵(Empathy Map) 분석 — Gemini(기본: 2.5 Pro)가 응답을 Says / Thinks / Does / Feels로 정리하고 원문 근거를 검증 |
+| Step 7 | 공감 맵(Empathy Map) 분석 — Gemini(기본: 3.1 Pro)가 응답을 Says / Thinks / Does / Feels로 정리하고 원문 근거를 검증 |
 | Step 8 | HMW(How Might We) 질문 도출 |
 
 ### Stage 3. 연도별 시계열 비교 분석
@@ -56,13 +56,15 @@ secrets 파일이 없으면 앱 사이드바에서 직접 키를 입력할 수 �
 | 단계 | 기능 | 모델 |
 |---|---|---|
 | Step 6 | 네트워크 분석 (키워드 그룹핑) | Gemini 2.5 Flash (고정) |
-| Step 7 | 공감 맵 (통합 · 세그먼트별) | Gemini 2.5 Pro (기본값) / Flash 선택 가능 |
-| Step 8 | HMW 질문 도출 | Gemini 2.5 Pro (기본값) / Flash 선택 가능 |
+| Step 7 | 공감 맵 (통합 · 세그먼트별) | Gemini 3.1 Pro (기본값) / 2.5 Flash 선택 가능 |
+| Step 8 | HMW 질문 도출 | Gemini 3.1 Pro (기본값) / 2.5 Flash 선택 가능 |
 
 Step 7·8의 모델은 사이드바의 **"Step 7·8 분석 모델 (공감 맵 · HMW)"** 메뉴에서 바꿀 수 있습니다.
 
 > 💡 **Pro 모델은 새 API 키가 필요 없습니다.** 지금 쓰는 Gemini API 키에 [Google AI Studio](https://aistudio.google.com/)에서 결제(유료 등급)만 연결하면 됩니다.
-> 무료 등급에서는 Pro 호출 한도가 매우 적어 429(한도 초과) 오류가 나기 쉬우니, 결제를 연결하지 않았다면 사이드바에서 **Gemini 2.5 Flash**를 선택하세요.
+> Gemini 3.1 Pro(`gemini-3.1-pro-preview`)는 API 무료 등급이 없어 결제 없이 호출하면 429(한도 초과) 오류가 납니다. 결제를 연결하지 않았다면 사이드바에서 **Gemini 2.5 Flash**를 선택하세요.
+>
+> `gemini-2.5-pro`는 Google 정책상 신규 사용자에게 더 이상 제공되지 않아(404 NOT_FOUND) 3.1 Pro로 교체했습니다.
 
 ## 파일 구성
 

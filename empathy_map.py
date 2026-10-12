@@ -33,7 +33,7 @@ MAX_SURVEY_CHARS = 24000
 
 # Gemini models: Flash for lightweight tasks (Step 6), Pro for deep analysis (Step 7·8)
 GEMINI_FAST_MODEL = "gemini-2.5-flash"
-GEMINI_PRO_MODEL = "gemini-2.5-pro"
+GEMINI_PRO_MODEL = "gemini-3.1-pro-preview"  # gemini-2.5-pro is no longer offered to new users
 
 # Default Korean stopwords list for network analysis
 STOPWORDS = {
@@ -425,7 +425,7 @@ else:
         st.session_state["gemini_api_key"] = gemini_key_input
 
 MODEL_OPTIONS = {
-    "Gemini 2.5 Pro (권장 · 유료 결제 필요)": GEMINI_PRO_MODEL,
+    "Gemini 3.1 Pro (권장 · 유료 결제 필요)": GEMINI_PRO_MODEL,
     "Gemini 2.5 Flash (무료 등급 사용 가능)": GEMINI_FAST_MODEL,
 }
 selected_model_label = st.sidebar.selectbox(
@@ -633,12 +633,18 @@ def generate_content_with_retry(client, model, contents, config, max_retries=4, 
                     continue
             raise e
 
+def analysis_config() -> dict:
+    # Gemini 3 models degrade (looping, worse reasoning) below the default temperature 1.0
+    if ANALYSIS_MODEL == GEMINI_PRO_MODEL:
+        return {'seed': 42}
+    return {'temperature': 0.0, 'seed': 42}
+
 def quota_error_message() -> str:
     msg = ("⚠️ **API 호출 한도가 초과되었습니다 (429 Quota Exceeded)**\n\n"
            "현재 Gemini Free Tier 키를 사용 중이시라면 분당 요청 횟수 제한이 매우 엄격하게 적용됩니다. "
            "잠시(30초~1분) 기다리신 후 다시 시도하시거나, 유료 결제 계정의 API 키로 교체해 사용해 주세요.")
     if ANALYSIS_MODEL == GEMINI_PRO_MODEL:
-        msg += ("\n\n💡 **Pro 모델은 무료 한도가 매우 적습니다.** 사이드바의 "
+        msg += ("\n\n💡 **Pro 모델은 무료 한도가 매우 적습니다(API 무료 등급 없음).** 사이드바의 "
                 "'Step 7·8 분석 모델'을 **Gemini 2.5 Flash**로 바꾸거나, "
                 "API 결제(유료 등급)를 연결해 주세요.")
     return msg
@@ -1850,7 +1856,7 @@ elif stage == "Stage 2: 주관식 데이터 분석 (정성)":
                                     client=client,
                                     model=ANALYSIS_MODEL,
                                     contents=prompt,
-                                    config={'temperature': 0.0, 'seed': 42}
+                                    config=analysis_config()
                                 )
                                 empathy_dict = parse_json_from_response(response.text)
                                 st.session_state.empathy_data_total = empathy_dict
@@ -1973,7 +1979,7 @@ elif stage == "Stage 2: 주관식 데이터 분석 (정성)":
                                         client=client,
                                         model=ANALYSIS_MODEL,
                                         contents=prompt,
-                                        config={'temperature': 0.0, 'seed': 42}
+                                        config=analysis_config()
                                     )
                                     empathy_dict = parse_json_from_response(response.text)
                                     st.session_state[f"empathy_data_{segment_col}_{val}"] = empathy_dict
@@ -2109,7 +2115,7 @@ elif stage == "Stage 2: 주관식 데이터 분석 (정성)":
                                 client=client,
                                 model=ANALYSIS_MODEL,
                                 contents=prompt,
-                                config={'temperature': 0.0, 'seed': 42}
+                                config=analysis_config()
                             )
                             hmw_dict = parse_json_from_response(response.text)
                             st.session_state.hmw_data = hmw_dict
