@@ -31,6 +31,10 @@ plt.rcParams['axes.unicode_minus'] = False
 MAX_RESPONSES = 300
 MAX_SURVEY_CHARS = 24000
 
+# Gemini models: Flash for lightweight tasks (Step 6), Pro for deep analysis (Step 7·8)
+GEMINI_FAST_MODEL = "gemini-2.5-flash"
+GEMINI_PRO_MODEL = "gemini-2.5-pro"
+
 # Default Korean stopwords list for network analysis
 STOPWORDS = {
     '것', '수', '등', '및', '데', '이', '그', '저', '적', '때', '바', '의', '에', '을', '를', '은', '는', '이', '가', 
@@ -420,6 +424,18 @@ else:
     if gemini_key_input:
         st.session_state["gemini_api_key"] = gemini_key_input
 
+MODEL_OPTIONS = {
+    "Gemini 2.5 Pro (권장 · 유료 결제 필요)": GEMINI_PRO_MODEL,
+    "Gemini 2.5 Flash (무료 등급 사용 가능)": GEMINI_FAST_MODEL,
+}
+selected_model_label = st.sidebar.selectbox(
+    "Step 7·8 분석 모델 (공감 맵 · HMW)",
+    list(MODEL_OPTIONS.keys()),
+    index=0,
+    help="공감 맵과 HMW 도출에 사용할 모델입니다. Step 6 네트워크 분석은 항상 Flash를 사용합니다."
+)
+ANALYSIS_MODEL = MODEL_OPTIONS[selected_model_label]
+
 st.sidebar.markdown("---")
 
 # 2. Stage Navigation
@@ -617,6 +633,16 @@ def generate_content_with_retry(client, model, contents, config, max_retries=4, 
                     continue
             raise e
 
+def quota_error_message() -> str:
+    msg = ("⚠️ **API 호출 한도가 초과되었습니다 (429 Quota Exceeded)**\n\n"
+           "현재 Gemini Free Tier 키를 사용 중이시라면 분당 요청 횟수 제한이 매우 엄격하게 적용됩니다. "
+           "잠시(30초~1분) 기다리신 후 다시 시도하시거나, 유료 결제 계정의 API 키로 교체해 사용해 주세요.")
+    if ANALYSIS_MODEL == GEMINI_PRO_MODEL:
+        msg += ("\n\n💡 **Pro 모델은 무료 한도가 매우 적습니다.** 사이드바의 "
+                "'Step 7·8 분석 모델'을 **Gemini 2.5 Flash**로 바꾸거나, "
+                "API 결제(유료 등급)를 연결해 주세요.")
+    return msg
+
 
 def run_semantic_network_analysis(df: pd.DataFrame, columns: list[str], exclude_single_char: bool, custom_stopwords: set[str], client) -> dict:
     # Extract nouns for all responses using Kiwi
@@ -675,7 +701,7 @@ def run_semantic_network_analysis(df: pd.DataFrame, columns: list[str], exclude_
     try:
         response = generate_content_with_retry(
             client=client,
-            model='gemini-2.5-flash',
+            model=GEMINI_FAST_MODEL,
             contents=prompt,
             config={'temperature': 0.0, 'seed': 42}
         )
@@ -1822,7 +1848,7 @@ elif stage == "Stage 2: 주관식 데이터 분석 (정성)":
                             try:
                                 response = generate_content_with_retry(
                                     client=client,
-                                    model='gemini-2.5-flash',
+                                    model=ANALYSIS_MODEL,
                                     contents=prompt,
                                     config={'temperature': 0.0, 'seed': 42}
                                 )
@@ -1833,7 +1859,7 @@ elif stage == "Stage 2: 주관식 데이터 분석 (정성)":
                             except Exception as e:
                                 err_str = str(e).lower()
                                 if "429" in err_str or "quota" in err_str or "resource_exhausted" in err_str:
-                                    st.error("⚠️ **API 호출 한도가 초과되었습니다 (429 Quota Exceeded)**\n\n현재 Gemini Free Tier 키를 사용 중이시라면 분당 요청 횟수 제한이 매우 엄격하게 적용됩니다. 잠시(30초~1분) 기다리신 후 다시 시도하시거나, 유료 결제 계정의 API 키로 교체해 사용해 주세요.")
+                                    st.error(quota_error_message())
                                 else:
                                     st.error(f"통합 공감 맵 생성 실패: {e}")
                                     
@@ -1945,14 +1971,18 @@ elif stage == "Stage 2: 주관식 데이터 분석 (정성)":
                                 try:
                                     response = generate_content_with_retry(
                                         client=client,
-                                        model='gemini-2.5-flash',
+                                        model=ANALYSIS_MODEL,
                                         contents=prompt,
                                         config={'temperature': 0.0, 'seed': 42}
                                     )
                                     empathy_dict = parse_json_from_response(response.text)
                                     st.session_state[f"empathy_data_{segment_col}_{val}"] = empathy_dict
                                 except Exception as e:
-                                    st.error(f"'{val}' 세그먼트 공감 맵 생성 실패: {e}")
+                                    err_str = str(e).lower()
+                                    if "429" in err_str or "quota" in err_str or "resource_exhausted" in err_str:
+                                        st.error(quota_error_message())
+                                    else:
+                                        st.error(f"'{val}' 세그먼트 공감 맵 생성 실패: {e}")
                                     
                                 progress_bar.progress((idx + 1) / len(unique_vals))
                                 
@@ -2077,7 +2107,7 @@ elif stage == "Stage 2: 주관식 데이터 분석 (정성)":
                         try:
                             response = generate_content_with_retry(
                                 client=client,
-                                model='gemini-2.5-flash',
+                                model=ANALYSIS_MODEL,
                                 contents=prompt,
                                 config={'temperature': 0.0, 'seed': 42}
                             )
@@ -2087,7 +2117,7 @@ elif stage == "Stage 2: 주관식 데이터 분석 (정성)":
                         except Exception as e:
                             err_str = str(e).lower()
                             if "429" in err_str or "quota" in err_str or "resource_exhausted" in err_str:
-                                st.error("⚠️ **API 호출 한도가 초과되었습니다 (429 Quota Exceeded)**\n\n현재 Gemini Free Tier 키를 사용 중이시라면 분당 요청 횟수 제한이 매우 엄격하게 적용됩니다. 잠시(30초~1분) 기다리신 후 다시 시도하시거나, 유료 결제 계정의 API 키로 교체해 사용해 주세요.")
+                                st.error(quota_error_message())
                             else:
                                 st.error(f"HMW 질문 도출 중 에러: {e}")
                                 
