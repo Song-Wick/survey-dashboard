@@ -766,17 +766,24 @@ def run_semantic_network_analysis(df: pd.DataFrame, columns: list[str], exclude_
     for k in keywords:
         G.add_node(k, size=freq_dict.get(k, 1))
         
+    max_w = max(int(co_matrix.values.max()), 1)
     for i in range(len(keywords)):
         for j in range(i + 1, len(keywords)):
             w = co_matrix.iloc[i, j]
             if w > 0:
-                G.add_edge(keywords[i], keywords[j], weight=w)
-                
-    # Calculate Centralities
-    degree_cent = nx.degree_centrality(G)
-    betweenness_cent = nx.betweenness_centrality(G)
-    closeness_cent = nx.closeness_centrality(G)
-    
+                # distance = max_w/weight (>= 1): keywords that co-occur more often are "closer",
+                # and closeness stays within 0~1
+                G.add_edge(keywords[i], keywords[j], weight=int(w), distance=max_w / w)
+
+    # Calculate weighted Centralities.
+    # With many responses almost every keyword pair co-occurs at least once, so the graph becomes
+    # complete and unweighted centralities are identical for all nodes (degree 1, betweenness 0).
+    strength = dict(G.degree(weight='weight'))
+    max_strength = max(strength.values()) if strength and max(strength.values()) > 0 else 1
+    degree_cent = {k: s / max_strength for k, s in strength.items()}
+    betweenness_cent = nx.betweenness_centrality(G, weight='distance')
+    closeness_cent = nx.closeness_centrality(G, distance='distance')
+
     df_cent = pd.DataFrame({
         '키워드': keywords,
         '연결정도 중심성': [round(degree_cent.get(k, 0.0), 3) for k in keywords],
@@ -788,7 +795,7 @@ def run_semantic_network_analysis(df: pd.DataFrame, columns: list[str], exclude_
     communities_list = []
     if len(G.edges) > 0:
         try:
-            communities_list = list(greedy_modularity_communities(G))
+            communities_list = list(greedy_modularity_communities(G, weight='weight'))
         except Exception:
             pass
             
@@ -865,7 +872,7 @@ def render_network_analysis_results(res: dict, label: str, key_suffix: str = "")
             x, y = pos[node]
             node_x.append(x)
             node_y.append(y)
-            node_text.append(f"<b>{node}</b><br>출현빈도: {freq_dict.get(node, 0)}회<br>연결도: {G.degree(node)}")
+            node_text.append(f"<b>{node}</b><br>출현빈도: {freq_dict.get(node, 0)}회<br>연결 키워드: {G.degree(node)}개<br>공동출현 합계: {G.degree(node, weight='weight')}회")
             node_size.append(min(15 + freq_dict.get(node, 1) * 2, 45))
             
         sorted_c_nodes = sorted(c_nodes, key=lambda x: freq_dict.get(x, 0), reverse=True)
@@ -918,15 +925,19 @@ def render_network_analysis_results(res: dict, label: str, key_suffix: str = "")
         st.caption("💡 노드를 클릭하고 잡아당기거나, 마우스 휠로 확대 및 스크롤할 수 있습니다.")
         
         st.markdown("##### 🔑 키워드 중심성 지표 분석")
-        df_cent_sorted = df_cent.sort_values(by="연결정도 중심성", ascending=False)
-        
+        df_cent_sorted = df_cent.sort_values(by=["연결정도 중심성", "매개 중심성"], ascending=False, kind="mergesort")
+
         def highlight_top5(row):
             if row.name in df_cent_sorted.index[:5]:
                 return ['background-color: rgba(254, 240, 138, 0.5); font-weight: bold'] * len(row)
             return [''] * len(row)
-            
-        st.dataframe(df_cent_sorted.style.apply(highlight_top5, axis=1), use_container_width=True, hide_index=True)
-        st.caption("💡 연결정도 중심성이 높은 상위 5개 핵심 키워드가 노란색으로 강조되어 표시됩니다.")
+
+        cent_cols = ["연결정도 중심성", "매개 중심성", "근접 중심성"]
+        st.dataframe(df_cent_sorted.style.apply(highlight_top5, axis=1).format("{:.3f}", subset=cent_cols),
+                     use_container_width=True, hide_index=True)
+        st.caption("💡 연결정도 중심성이 높은 상위 5개 핵심 키워드가 노란색으로 강조되어 표시됩니다. "
+                   "모든 지표는 응답 내 공동출현 횟수를 가중치로 반영합니다 "
+                   "(연결정도: 공동출현 합계를 최댓값 1로 환산, 매개·근접: 공동출현이 많을수록 가까운 거리로 계산).")
         
     with col_n2:
         st.markdown("##### 키워드 동시출현 원형 빈도수 매트릭스")
@@ -950,7 +961,7 @@ def render_network_analysis_results(res: dict, label: str, key_suffix: str = "")
             fig_plt, ax = plt.subplots(figsize=(6, 5))
             node_colors_plt = [colors_palette[node_community_dict[n] % len(colors_palette)] for n in G.nodes()]
             nx.draw_networkx_nodes(G, pos, ax=ax, node_size=[freq_dict.get(n, 1)*50 + 200 for n in G.nodes()], node_color=node_colors_plt)
-            nx.draw_networkx_edges(G, pos, ax=ax, width=[G[u][v]['weight']*0.8 for u,v in G.edges()], edge_color='gray', alpha=0.5)
+            nx.draw_networkx_edges(G, pos, ax=ax, width=[min(G[u][v]['weight']*0.8, 6.0) for u,v in G.edges()], edge_color='gray', alpha=0.5)
             nx.draw_networkx_labels(G, pos, ax=ax, font_family='Malgun Gothic', font_size=10, font_weight='bold')
             ax.axis('off')
             plt.tight_layout()
