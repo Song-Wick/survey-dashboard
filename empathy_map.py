@@ -1061,40 +1061,70 @@ def build_feels_html(feels_list: list, survey_text: str) -> str:
     return "".join(html_lines)
 
 def build_raw_empathy_text(em_data: dict) -> str:
-    raw_text = "=== [공감 맵 분석 결과] ===\\n\\n"
+    raw_text = "=== [공감 맵 분석 결과] ===\n\n"
     
-    raw_text += "[SAYS - 말한다]\\n"
+    raw_text += "[SAYS - 말한다]\n"
     for item in em_data.get("says", []):
         if isinstance(item, dict):
-            raw_text += f"- {item.get('text')} (근거: '{item.get('evidence')}')\\n"
+            raw_text += f"- {item.get('text')} (근거: '{item.get('evidence')}')\n"
         else:
-            raw_text += f"- {item}\\n"
-    raw_text += "\\n"
+            raw_text += f"- {item}\n"
+    raw_text += "\n"
     
-    raw_text += "[THINKS - 생각한다]\\n"
+    raw_text += "[THINKS - 생각한다]\n"
     for item in em_data.get("thinks", []):
         if isinstance(item, dict):
-            raw_text += f"- {item.get('text')} (근거: '{item.get('evidence')}')\\n"
+            raw_text += f"- {item.get('text')} (근거: '{item.get('evidence')}')\n"
         else:
-            raw_text += f"- {item}\\n"
-    raw_text += "\\n"
+            raw_text += f"- {item}\n"
+    raw_text += "\n"
     
-    raw_text += "[DOES - 행동한다]\\n"
+    raw_text += "[DOES - 행동한다]\n"
     for item in em_data.get("does", []):
         if isinstance(item, dict):
-            raw_text += f"- {item.get('text')} (근거: '{item.get('evidence')}')\\n"
+            raw_text += f"- {item.get('text')} (근거: '{item.get('evidence')}')\n"
         else:
-            raw_text += f"- {item}\\n"
-    raw_text += "\\n"
+            raw_text += f"- {item}\n"
+    raw_text += "\n"
     
-    raw_text += "[FEELS - 느낀다]\\n"
+    raw_text += "[FEELS - 느낀다]\n"
     for item in em_data.get("feels", []):
         if isinstance(item, dict):
-            raw_text += f"- [{item.get('type')}] {item.get('text')} (근거: '{item.get('evidence')}')\\n"
+            raw_text += f"- [{item.get('type')}] {item.get('text')} (근거: '{item.get('evidence')}')\n"
         else:
-            raw_text += f"- {item}\\n"
-            
+            raw_text += f"- {item}\n"
+
     return raw_text
+
+def build_empathy_markdown(em_data: dict, survey_text: str, scope: str) -> str:
+    feel_labels = {"pos": "긍정", "neg": "부정", "neu": "중립"}
+    sections = [
+        ("says", "💬 Says (말한다)"),
+        ("thinks", "💭 Thinks (생각한다)"),
+        ("does", "🏃 Does (행동한다)"),
+        ("feels", "❤️ Feels (느낀다)"),
+    ]
+    lines = ["# 공감 맵(Empathy Map) 분석 결과", "", f"- **분석 대상:** {scope}", ""]
+    for key, title in sections:
+        lines += [f"## {title}", ""]
+        items = em_data.get(key, [])
+        if not items:
+            lines += ["- (도출된 항목 없음)", ""]
+            continue
+        for item in items:
+            if isinstance(item, dict):
+                text = item.get("text", "")
+                evidence = item.get("evidence", "")
+                f_type = item.get("type", "neu")
+            else:
+                text, evidence, f_type = str(item), "", "neu"
+            prefix = f"**[{feel_labels.get(f_type, '중립')}]** " if key == "feels" else ""
+            lines.append(f"- {prefix}{text}")
+            if evidence:
+                warn = "" if verify_evidence(evidence, survey_text) else " ⚠️ 근거 확인 필요"
+                lines.append(f"  - 관측된 응답: \"{evidence}\"{warn}")
+        lines.append("")
+    return "\n".join(lines)
 
 
 # ========== [Main Dashboard Render] ==========
@@ -1920,13 +1950,23 @@ elif stage == "Stage 2: 주관식 데이터 분석 (정성)":
                         st.markdown("🤖 **복사 및 다운로드**")
                         raw_empathy_text = build_raw_empathy_text(em_data)
                         st.code(raw_empathy_text, language='text')
-                        st.download_button(
-                            label="📥 공감맵 데이터 JSON 다운로드",
-                            data=json.dumps(em_data, ensure_ascii=False, indent=2),
-                            file_name="empathy_map_total.json",
-                            mime="application/json",
-                            key="dl_empathy_total"
-                        )
+                        dl_col1, dl_col2 = st.columns(2)
+                        with dl_col1:
+                            st.download_button(
+                                label="📥 공감맵 데이터 JSON 다운로드",
+                                data=json.dumps(em_data, ensure_ascii=False, indent=2),
+                                file_name="empathy_map_total.json",
+                                mime="application/json",
+                                key="dl_empathy_total"
+                            )
+                        with dl_col2:
+                            st.download_button(
+                                label="📝 공감맵 Markdown 다운로드",
+                                data=build_empathy_markdown(em_data, survey_text, "전체 응답 (통합)"),
+                                file_name="empathy_map_total.md",
+                                mime="text/markdown",
+                                key="dl_empathy_total_md"
+                            )
                 else:
                     # Segment Empathy Map Mode
                     if segment_col:
@@ -2053,13 +2093,23 @@ elif stage == "Stage 2: 주관식 데이터 분석 (정성)":
                                     st.markdown("🤖 **복사 및 다운로드**")
                                     raw_empathy_text = build_raw_empathy_text(em_data)
                                     st.code(raw_empathy_text, language='text')
-                                    st.download_button(
-                                        label=f"📥 {val} 세그먼트 공감맵 데이터 JSON 다운로드",
-                                        data=json.dumps(em_data, ensure_ascii=False, indent=2),
-                                        file_name=f"empathy_map_{segment_col}_{val}.json",
-                                        mime="application/json",
-                                        key=f"dl_empathy_{segment_col}_{val}"
-                                    )
+                                    dl_col1, dl_col2 = st.columns(2)
+                                    with dl_col1:
+                                        st.download_button(
+                                            label=f"📥 {val} 세그먼트 공감맵 데이터 JSON 다운로드",
+                                            data=json.dumps(em_data, ensure_ascii=False, indent=2),
+                                            file_name=f"empathy_map_{segment_col}_{val}.json",
+                                            mime="application/json",
+                                            key=f"dl_empathy_{segment_col}_{val}"
+                                        )
+                                    with dl_col2:
+                                        st.download_button(
+                                            label=f"📝 {val} 세그먼트 공감맵 Markdown 다운로드",
+                                            data=build_empathy_markdown(em_data, survey_text_seg, f"세그먼트 — {segment_col}: {val}"),
+                                            file_name=f"empathy_map_{segment_col}_{val}.md",
+                                            mime="text/markdown",
+                                            key=f"dl_empathy_{segment_col}_{val}_md"
+                                        )
                                 else:
                                     st.info(f"💡 '{val}' 세그먼트의 공감맵 분석 결과가 존재하지 않습니다. 상단의 '세그먼트별 공감맵 일괄 생성' 버튼을 클릭해 주세요.")
 
